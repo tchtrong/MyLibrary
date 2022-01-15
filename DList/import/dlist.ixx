@@ -1,6 +1,7 @@
 module;
 #include <iterator>
 #include <initializer_list>
+#include <utility>
 
 export module dlist;
 
@@ -22,65 +23,68 @@ export namespace MyLib {
         //==================================================
         struct node {
             node() = default;
-            node(const T& val) :m_val{ val } {};
+            node(const T& value) :m_val{ value } {};
+            node(T&& value) :m_val{ std::move(value) } {};
             T m_val{};
             node* m_prev{};
             node* m_next{};
         };
 
     public:
-        class iterator : public std::bidirectional_iterator_tag {
-        public:
-            iterator() = default;
+            class iterator : public std::bidirectional_iterator_tag {
+            public:
+                iterator() = default;
 
-            using value_type = DList<T>::value_type;
-            using difference_type = DList<T>::difference_type;
-            using reference = DList<T>::reference;
-            using pointer = DList<T>::pointer;
+                using value_type = DList<T>::value_type;
+                using difference_type = DList<T>::difference_type;
+                using reference = DList<T>::reference;
+                using pointer = DList<T>::pointer;
 
-            bool operator==(const iterator& rhs)const = default;
+                bool operator==(const iterator& rhs) const {
+                    return m_ptrNode == rhs.m_ptrNode;
+                }
 
-            reference operator*() {
-                return m_ptrNode->m_val;
-            }
-            reference operator*() const {
-                return m_ptrNode->m_val;
-            }
+                reference operator*() {
+                    return m_ptrNode->m_val;
+                }
+                reference operator*() const {
+                    return m_ptrNode->m_val;
+                }
 
-            pointer operator->() {
-                return &(m_ptrNode->m_val);
-            }
-            pointer operator->() const {
-                return &(m_ptrNode->m_val);
-            }
+                pointer operator->() {
+                    return &(m_ptrNode->m_val);
+                }
+                pointer operator->() const {
+                    return &(m_ptrNode->m_val);
+                }
 
-            iterator& operator++() {
-                m_ptrNode = m_ptrNode->m_next;
-                return *this;
-            }
-            iterator operator++(int) {
-                iterator p = *this;
-                ++(*this);
-                return p;
-            }
+                iterator& operator++() {
+                    m_ptrNode = m_ptrNode->m_next;
+                    return *this;
+                }
+                iterator operator++(int) {
+                    iterator p = *this;
+                    ++(*this);
+                    return p;
+                }
 
-            iterator& operator--() {
-                m_ptrNode = m_ptrNode->m_prev;
-                return *this;
-            }
-            iterator operator--(int) {
-                iterator p = *this;
-                --(*this);
-                return p;
-            }
+                iterator& operator--() {
+                    m_ptrNode = m_ptrNode->m_prev;
+                    return *this;
+                }
+                iterator operator--(int) {
+                    iterator p = *this;
+                    --(*this);
+                    return p;
+                }
 
-        private:
-            friend DList<T>;
+            private:
+                friend DList<T>;
 
-            iterator(node* val) :m_ptrNode{ val } {}
+                iterator(node* val) :m_ptrNode{ val } {}
 
-            node* m_ptrNode{};
-        };
+                node* m_ptrNode{};
+            };
         using const_iterator = typename DList<const value_type>::iterator;
         using reverse_iterator = std::reverse_iterator<iterator>;
         using const_reverse_iterator = std::reverse_iterator<const_iterator>;
@@ -91,6 +95,8 @@ export namespace MyLib {
         //==================================================
 
         //=====     Constructor     =====
+
+        DList() = default;
 
         DList(size_type count, const T& value) {
             while (count > 0) {
@@ -120,17 +126,25 @@ export namespace MyLib {
             }
         }
 
-        //DList(DList&& other) noexcept;
+        DList(DList&& other) noexcept {
+            for (auto&& x : other) {
+                this->push_back(std::move(x));
+            }
+        }
 
-        //DList(std::initializer_list<T> init);
+        DList(std::initializer_list<T> init) {
+            for (auto x : init) {
+                this->push_back(std::move(x));
+            }
+        }
 
         ////=====     Assignment operator     =====
 
-        //list& operator=(const list& other);
+        //DList& operator=(const DList& other);
 
-        //list& operator=(list&& other) noexcept;
+        //DList& operator=(DList&& other) noexcept;
 
-        //list& operator=(std::initializer_list<T> ilist);
+        //DList& operator=(std::initializer_list<T> ilist);
 
         ////=====     Assignment functions     =====
 
@@ -144,20 +158,7 @@ export namespace MyLib {
         //=====     Destructor     =====
 
         ~DList() {
-            if (m_head) {
-                while (m_head != m_tail) {
-                    node* p = m_head->m_next;
-
-                    p->m_prev = nullptr;
-                    m_head->m_next = nullptr;
-
-                    delete m_head;
-                    m_head = p;
-                }
-                delete m_head;
-                m_head = nullptr;
-                m_tail = nullptr;
-            }
+            this->clear();
         }
 
         //=====     Element access     =====
@@ -178,13 +179,13 @@ export namespace MyLib {
 
         //=====     Iterators      =====
 
-        iterator begin() {
+        iterator begin() noexcept {
             return iterator{ m_head };
         }
-        const_iterator begin() const {
+        const_iterator begin() const noexcept {
             return const_iterator{ m_head };
         }
-        const_iterator cbegin() {
+        const_iterator cbegin() const  noexcept {
             return const_iterator{ m_head };
         }
 
@@ -204,7 +205,22 @@ export namespace MyLib {
 
         //=====     Modifiers       =====
 
-        void clear() noexcept;
+        void clear() noexcept {
+            if (m_head) {
+                while (m_head != m_tail) {
+                    node* p = m_head->m_next;
+
+                    p->m_prev = nullptr;
+                    m_head->m_next = nullptr;
+
+                    delete m_head;
+                    m_head = p;
+                }
+                delete m_head;
+                m_head = nullptr;
+                m_tail = nullptr;
+            }
+        }
 
         iterator insert(const_iterator pos, const T& value) {
             if (pos.m_ptrNode) {
@@ -240,13 +256,13 @@ export namespace MyLib {
         template< class... Args >
         iterator emplace(const_iterator pos, Args&&... args);
 
-        void push_front(const T& val) {
+        void push_front(T&& value) {
             if (m_head == nullptr) {
-                m_head = new node(val);
+                m_head = new node(std::move(value));
                 m_tail = m_head;
             }
             else {
-                m_head->m_prev = new node(val);
+                m_head->m_prev = new node(std::move(value));
                 m_head->m_prev->m_next = m_head;
                 m_head = m_head->m_prev;
             }
@@ -254,7 +270,10 @@ export namespace MyLib {
             ++m_size;
         }
 
-        void push_front(T&& value);
+        void push_front(const T& value) {
+            T tmp{ value };
+            this->push_front(std::move(tmp));
+        }
 
         void pop_front() {
             node* p = m_head;
@@ -271,13 +290,13 @@ export namespace MyLib {
             delete p;
         }
 
-        void push_back(const T& val) {
+        void push_back(T&& value) {
             if (m_head == nullptr) {
-                m_head = new node(val);
+                m_head = new node(std::move(value));
                 m_tail = m_head;
             }
             else {
-                m_tail->m_next = new node(val);
+                m_tail->m_next = new node(std::move(value));
                 m_tail->m_next->m_prev = m_tail;
                 m_tail = m_tail->m_next;
             }
@@ -285,7 +304,10 @@ export namespace MyLib {
             ++m_size;
         }
 
-        void push_back(T&& value);
+        void push_back(const T& value) {
+            T tmp{ value };
+            this->push_back(std::move(tmp));
+        }
 
         void pop_back() {
             node* p = m_tail;
