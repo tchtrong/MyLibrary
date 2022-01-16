@@ -22,10 +22,10 @@ export namespace MyLib {
         //================     Node    =====================
         //==================================================
         struct node {
-            node() = default;
-            explicit node(const T& value) :m_val{ value } {};
-            explicit node(T&& value) :m_val{ std::move(value) } {};
-            T m_val{};
+            template<class ...Args>
+            node(Args&&...args) :m_val{ std::forward<Args>(args)... } {}
+
+            T m_val;
             node* m_prev{};
             node* m_next{};
         };
@@ -133,31 +133,31 @@ export namespace MyLib {
         DList() = default;
 
         DList(size_type count, const T& value) {
-            while (count > 0) {
+            while (count) {
                 this->push_back(value);
                 --count;
             }
         }
 
         explicit DList(size_type count) {
-            while (count > 0) {
-                this->push_back(T());
+            while (count) {
+                this->push_back(T{});
                 --count;
             }
         }
 
         template<std::input_iterator InputIt>
         DList(InputIt first, InputIt last) {
-            while (first != last) {
+            while (first!=last) {
                 this->push_back(*first);
                 ++first;
             }
         }
 
         DList(const DList& other) {
-            for (const auto& x : other) {
-                this->push_back(x);
-            }
+            for (auto& x : other) {
+				this->push_back(x);
+			}
         }
 
         DList(DList&& other) noexcept {
@@ -167,27 +167,64 @@ export namespace MyLib {
         }
 
         DList(std::initializer_list<T> init) {
-            for (auto x : init) {
-                this->push_back(std::move(x));
+            for (auto& x : init) {
+                this->push_back(x);
             }
         }
 
         ////=====     Assignment operator     =====
 
-        //DList& operator=(const DList& other);
+        DList& operator=(const DList& other) {
+            if (this != &other) {
+                this->clear();
+                for (auto& x : other) {
+                    this->push_back(x);
+                }
+            }
+            return *this;
+        }
 
-        //DList& operator=(DList&& other) noexcept;
+        DList& operator=(DList&& other) noexcept {
+            if (this != &other) {
+                this->clear();
+                for (auto&& x : other) {
+                    this->push_back(std::move(x));
+                }
+            }
+            return *this;
+        }
 
-        //DList& operator=(std::initializer_list<T> ilist);
+        DList& operator=(std::initializer_list<T> ilist) {
+            for (auto& x : ilist) {
+                this->push_back(x);
+            }
+        }
 
         ////=====     Assignment functions     =====
 
-        //void assign(size_type count, const T& value);
+        void assign(size_type count, const T& value) {
+            this->clear();
+            while (count) {
+                this->push_back(value);
+                --count;
+            }
+        }
 
-        //template< class InputIt >
-        //void assign(InputIt first, InputIt last);
+		template< std::input_iterator InputIt >
+        void assign(InputIt first, InputIt last) {
+            this->clear();
+            while (first != last) {
+				this->push_back(*first);
+                ++first;
+            }
+        }
 
-        //void assign(std::initializer_list<T> ilist);
+        void assign(std::initializer_list<T> ilist) {
+            this->clear();
+            for (auto& x : ilist) {
+                this->push_back(x);
+            }
+        }
 
         //=====     Destructor     =====
 
@@ -214,40 +251,40 @@ export namespace MyLib {
         //=====     Iterators      =====
 
         iterator begin() noexcept {
-            return { m_head, this };
+            return { this, m_head };
         }
         const_iterator begin() const noexcept {
-            return { m_head, this };
+            return { this, m_head };
         }
         const_iterator cbegin() const noexcept {
             return begin();
         }
 
         iterator end() {
-            return m_end;
+            return {false, true, this};
         }
         const_iterator end() const noexcept {
-            return m_end;
+            return { false, true, this };
         }
         const_iterator cend() const noexcept {
-            return m_end;
+            return end();
         }
 
         reverse_iterator rbegin() noexcept {
-            return { m_tail, this };
+            return { this, m_tail };
         }
         const_reverse_iterator rbegin() const noexcept {
-            return { m_tail, this };
+            return { this, m_tail };
         }
         const_reverse_iterator crbegin() const noexcept {
             return rbegin();
         }
 
         reverse_iterator rend() noexcept {
-            return m_rend;
+            return { true, false, this };
         }
         const_reverse_iterator rend() const noexcept {
-            return m_rend;
+            return { true, false, this };
         }
         const_reverse_iterator crend() const noexcept {
             return rend();
@@ -267,51 +304,93 @@ export namespace MyLib {
 
         void clear() noexcept {
             if (m_head) {
-                while (m_head != m_tail) {
-                    node* p = m_head->m_next;
-
-                    p->m_prev = nullptr;
-                    m_head->m_next = nullptr;
-
-                    delete m_head;
-                    m_head = p;
-                }
-                delete m_head;
-                m_head = nullptr;
-                m_tail = nullptr;
+                this->pop_back();
             }
         }
 
         iterator insert(const_iterator pos, const T& value) {
-            
+            return emplace(pos, value);
         }
 
-        iterator insert(const_iterator pos, T&& value);
+        iterator insert(const_iterator pos, T&& value) {
+            return emplace(pos, std::move(value));
+        }
 
-        iterator insert(const_iterator pos, size_type count, const T& value);
+        iterator insert(const_iterator pos, size_type count, const T& value) {
+            if (!count) {
+                return pos;
+            }
+            else {
+                auto p = emplace(pos, value);
+                --count;
+                while (count > 0) {
+                    emplace(pos, value);
+                    --count;
+                }
+                return p;
+            }
+        }
 
         template<std::input_iterator InputIt>
-        iterator insert(const_iterator pos, InputIt first, InputIt last);
+        iterator insert(const_iterator pos, InputIt first, InputIt last) {
+            if (first == last) {
+                return pos;
+            }
+            else {
+                auto p = emplace(pos, *first);
+                ++first;
+                while (first != last) {
+                    emplace(pos, *first);
+                }
+                return p;
+            }
+        }
 
-        iterator insert(const_iterator pos, std::initializer_list<T> ilist);
+        iterator insert(const_iterator pos, std::initializer_list<T> ilist) {
+            if (!ilist.size()) {
+                return pos;
+            }
+            else {
+                auto begin_ = ilist.begin();
+                auto end_ = ilist.end();
+                auto p = emplace(pos, *begin_);
+                --begin_;
+                while (begin_ != end_) {
+                    emplace(pos, *begin_);
+                    --begin_;
+                }
+                return p;
+            }
+        }
 
         template< class... Args >
         iterator emplace(const_iterator pos, Args&&... args) {
             if (pos.m_parrent == this) {
                 node* new_node = new node{ std::forward<Args>(args)... };
-                if (pos.is_rend) {
-                    new_node->m_prev = m_rend;
-                    if (m_head == nullptr) {
-                        m_head = new_node;
-                        m_tail = m_head;
-                    }
+                if (m_head == nullptr) {
+                    m_head = new_node;
+                    m_tail = m_head;
                 }
                 else if (pos.is_end) {
-
+                    m_tail->m_next = new_node;
+                    new_node->m_prev = m_tail;
+                    m_tail = new_node;
                 }
                 else {
+                    new_node->m_next = pos.m_ptrNode;
+                    new_node->m_prev = pos->m_prev;
 
+                    if (pos.m_ptrNode != m_head) {
+                        pos->m_prev->m_next = new_node;
+                    }
+                    else {
+                        m_head = new_node;
+                    }
+
+                    new_node->m_next->m_prev = new_node;
                 }
+                ++m_size;
+                return { this, new_node };
             }
             else {
                 //TODO: Throw exception
@@ -319,17 +398,21 @@ export namespace MyLib {
         }
 
         template< class... Args >
-        reference emplace_back(Args&&... args);
+        reference emplace_back(Args&&... args) {
+            return *emplace(end(), std::forward<Args>(args)...);
+        }
 
         template< class... Args >
-        reference emplace_front(Args&&... args);
+        reference emplace_front(Args&&... args) {
+            return *emplace(begin(), std::forward<Args>(args)...);
+        }
 
         void push_front(T&& value) {
-            
+            emplace(begin(), std::move(value));
         }
 
         void push_front(const T& value) {
-            
+            emplace(begin(), value);
         }
 
         void pop_front() {
@@ -349,11 +432,11 @@ export namespace MyLib {
         }
 
         void push_back(T&& value) {
-            
+            emplace(end(), std::move(value));
         }
 
         void push_back(const T& value) {
-            
+            emplace(end(), value);
         }
 
         void pop_back() {
@@ -440,8 +523,6 @@ export namespace MyLib {
     private:
         node* m_head{};
         node* m_tail{};
-        iterator m_rend{ true, false, this };
-        iterator m_end{ false, true, this };
         int m_size{};
     };
 }
