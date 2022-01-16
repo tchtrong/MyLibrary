@@ -44,7 +44,10 @@ export namespace MyLib {
             using pointer = DList<T>::pointer;
 
             bool operator==(const iterator& rhs) const {
-                return m_ptrNode == rhs.m_ptrNode;
+                return m_parrent == rhs.m_parrent
+                    && is_rend   == rhs.is_rend
+                    && is_end    == rhs.is_end
+                    && m_ptrNode == rhs.m_ptrNode;
             }
 
             reference operator*() const {
@@ -58,7 +61,7 @@ export namespace MyLib {
                 if (m_parrent && !is_end) {
                     if (is_rend) {
                         is_rend = false;
-                        m_ptrNode = m_parrent->m_tail;
+                        m_ptrNode = m_parrent->m_head;
                     }
                     else {
                         if (m_ptrNode == m_parrent->m_tail) {
@@ -66,7 +69,7 @@ export namespace MyLib {
                             m_ptrNode = nullptr;
                         }
                         else {
-                            m_ptrNode = m_ptrNode->m_prev;
+                            m_ptrNode = m_ptrNode->m_next;
                         }
                     }
                 }
@@ -221,13 +224,13 @@ export namespace MyLib {
         }
 
         iterator end() {
-            return { false, true, this };
+            return m_end;
         }
         const_iterator end() const noexcept {
-            return { false, true, this };
+            return m_end;
         }
         const_iterator cend() const noexcept {
-            return end();
+            return m_end;
         }
 
         reverse_iterator rbegin() noexcept {
@@ -241,10 +244,10 @@ export namespace MyLib {
         }
 
         reverse_iterator rend() noexcept {
-            return { true, false, this };
+            return m_rend;
         }
         const_reverse_iterator rend() const noexcept {
-            return { true, false, this };
+            return m_rend;
         }
         const_reverse_iterator crend() const noexcept {
             return rend();
@@ -293,74 +296,80 @@ export namespace MyLib {
         iterator insert(const_iterator pos, std::initializer_list<T> ilist);
 
         template< class... Args >
-        iterator emplace(const_iterator pos, Args&&... args);
+        iterator emplace(const_iterator pos, Args&&... args) {
+            if (pos.m_parrent == this) {
+                node* new_node = new node{ std::forward<Args>(args)... };
+                if (pos.is_rend) {
+                    new_node->m_prev = m_rend;
+                    if (m_head == nullptr) {
+                        m_head = new_node;
+                        m_tail = m_head;
+                    }
+                }
+                else if (pos.is_end) {
 
-        void push_front(T&& value) {
-            if (m_head == nullptr) {
-                m_head = new node(std::move(value));
-                m_tail = m_head;
+                }
+                else {
+
+                }
             }
             else {
-                m_head->m_prev = new node(std::move(value));
-                m_head->m_prev->m_next = m_head;
-                m_head = m_head->m_prev;
+                //TODO: Throw exception
             }
+        }
 
-            ++m_size;
+        template< class... Args >
+        reference emplace_back(Args&&... args);
+
+        template< class... Args >
+        reference emplace_front(Args&&... args);
+
+        void push_front(T&& value) {
+            
         }
 
         void push_front(const T& value) {
-            T tmp{ value };
-            this->push_front(std::move(tmp));
+            
         }
 
         void pop_front() {
-            node* p = m_head;
-            if (m_head->m_next) {
-                m_head = m_head->m_next;
-                m_head->m_prev = nullptr;
+            if (m_head) {
+                if (m_tail == m_head) {
+                    delete m_head;
+                    m_head = nullptr;
+                    m_tail = nullptr;
+                }
+                else {
+                    m_head = m_head->m_next;
+                    delete m_head->m_prev;
+                    m_tail->m_prev = nullptr;
+                }
+                --m_size;
             }
-            else {
-                m_head = nullptr;
-                m_tail = nullptr;
-            }
-            --m_size;
-
-            delete p;
         }
 
         void push_back(T&& value) {
-            if (m_head == nullptr) {
-                m_head = new node(std::move(value));
-                m_tail = m_head;
-            }
-            else {
-                m_tail->m_next = new node(std::move(value));
-                m_tail->m_next->m_prev = m_tail;
-                m_tail = m_tail->m_next;
-            }
-
-            ++m_size;
+            
         }
 
         void push_back(const T& value) {
-            T tmp{ value };
-            this->push_back(std::move(tmp));
+            
         }
 
         void pop_back() {
-            node* p = m_tail;
-            if (m_tail->m_prev) {
-                m_tail = m_tail->m_prev;
-                m_tail->m_next = nullptr;
+            if (m_tail) {
+                if (m_tail == m_head) {
+                    delete m_tail;
+                    m_head = nullptr;
+                    m_tail = nullptr;
+                }
+                else {
+                    m_tail = m_tail->m_prev;
+                    delete m_tail->m_next;
+                    m_tail->m_next = nullptr;
+                }
+                --m_size;
             }
-            else {
-                m_head = nullptr;
-                m_tail = nullptr;
-            }
-            --m_size;
-
-            delete p;
         }
 
         //=====     Operations       =====
@@ -431,6 +440,8 @@ export namespace MyLib {
     private:
         node* m_head{};
         node* m_tail{};
+        iterator m_rend{ true, false, this };
+        iterator m_end{ false, true, this };
         int m_size{};
     };
 }
