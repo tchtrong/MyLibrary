@@ -23,68 +23,99 @@ export namespace MyLib {
         //==================================================
         struct node {
             node() = default;
-            node(const T& value) :m_val{ value } {};
-            node(T&& value) :m_val{ std::move(value) } {};
+            explicit node(const T& value) :m_val{ value } {};
+            explicit node(T&& value) :m_val{ std::move(value) } {};
             T m_val{};
             node* m_prev{};
             node* m_next{};
         };
 
     public:
-            class iterator : public std::bidirectional_iterator_tag {
-            public:
-                iterator() = default;
+        //==================================================
+        //================     Iterator    =================
+        //==================================================
+        class iterator : public std::bidirectional_iterator_tag {
+        public:
+            iterator() = default;
 
-                using value_type = DList<T>::value_type;
-                using difference_type = DList<T>::difference_type;
-                using reference = DList<T>::reference;
-                using pointer = DList<T>::pointer;
+            using value_type = DList<T>::value_type;
+            using difference_type = DList<T>::difference_type;
+            using reference = DList<T>::reference;
+            using pointer = DList<T>::pointer;
 
-                bool operator==(const iterator& rhs) const {
-                    return m_ptrNode == rhs.m_ptrNode;
-                }
+            bool operator==(const iterator& rhs) const {
+                return m_ptrNode == rhs.m_ptrNode;
+            }
 
-                reference operator*() {
-                    return m_ptrNode->m_val;
-                }
-                reference operator*() const {
-                    return m_ptrNode->m_val;
-                }
+            reference operator*() const {
+                return m_ptrNode->m_val;
+            }
+            pointer operator->() const {
+                return &(m_ptrNode->m_val);
+            }
 
-                pointer operator->() {
-                    return &(m_ptrNode->m_val);
+            iterator& operator++() {
+                if (m_parrent && !is_end) {
+                    if (is_rend) {
+                        is_rend = false;
+                        m_ptrNode = m_parrent->m_tail;
+                    }
+                    else {
+                        if (m_ptrNode == m_parrent->m_tail) {
+                            is_end = true;
+                            m_ptrNode = nullptr;
+                        }
+                        else {
+                            m_ptrNode = m_ptrNode->m_prev;
+                        }
+                    }
                 }
-                pointer operator->() const {
-                    return &(m_ptrNode->m_val);
-                }
+                return *this;
+            }
+            iterator operator++(int) {
+                iterator p = *this;
+                ++(*this);
+                return p;
+            }
 
-                iterator& operator++() {
-                    m_ptrNode = m_ptrNode->m_next;
-                    return *this;
+            iterator& operator--() {
+                if (m_parrent && !is_rend) {
+                    if (is_end) {
+                        is_end = false;
+                        m_ptrNode = m_parrent->m_tail;
+                    }
+                    else {
+                        if (m_ptrNode == m_parrent->m_head) {
+                            is_rend = true;
+                            m_ptrNode = nullptr;
+                        }
+                        else {
+                            m_ptrNode = m_ptrNode->m_prev;
+                        }
+                    }
                 }
-                iterator operator++(int) {
-                    iterator p = *this;
-                    ++(*this);
-                    return p;
-                }
+                return *this;
+            }
+            iterator operator--(int) {
+                iterator p = *this;
+                --(*this);
+                return p;
+            }
 
-                iterator& operator--() {
-                    m_ptrNode = m_ptrNode->m_prev;
-                    return *this;
-                }
-                iterator operator--(int) {
-                    iterator p = *this;
-                    --(*this);
-                    return p;
-                }
+        private:
+            friend DList<T>;
 
-            private:
-                friend DList<T>;
+            iterator(bool is_rend_, bool is_end_, DList<T>* parrent) 
+                : is_rend{ is_rend_ }, is_end{ is_end_ }, m_parrent{ parrent }{}
 
-                iterator(node* val) :m_ptrNode{ val } {}
+            iterator(DList<T>* parrent, node* value) : m_parrent{ parrent }, m_ptrNode{ value }{}
 
-                node* m_ptrNode{};
-            };
+            bool is_rend = false;
+            bool is_end = false;
+
+            DList<T>* m_parrent;
+            node* m_ptrNode{};
+        };
         using const_iterator = typename DList<const value_type>::iterator;
         using reverse_iterator = std::reverse_iterator<iterator>;
         using const_reverse_iterator = std::reverse_iterator<const_iterator>;
@@ -180,17 +211,43 @@ export namespace MyLib {
         //=====     Iterators      =====
 
         iterator begin() noexcept {
-            return iterator{ m_head };
+            return { m_head, this };
         }
         const_iterator begin() const noexcept {
-            return const_iterator{ m_head };
+            return { m_head, this };
         }
-        const_iterator cbegin() const  noexcept {
-            return const_iterator{ m_head };
+        const_iterator cbegin() const noexcept {
+            return begin();
         }
 
         iterator end() {
-            return nullptr;
+            return { false, true, this };
+        }
+        const_iterator end() const noexcept {
+            return { false, true, this };
+        }
+        const_iterator cend() const noexcept {
+            return end();
+        }
+
+        reverse_iterator rbegin() noexcept {
+            return { m_tail, this };
+        }
+        const_reverse_iterator rbegin() const noexcept {
+            return { m_tail, this };
+        }
+        const_reverse_iterator crbegin() const noexcept {
+            return rbegin();
+        }
+
+        reverse_iterator rend() noexcept {
+            return { true, false, this };
+        }
+        const_reverse_iterator rend() const noexcept {
+            return { true, false, this };
+        }
+        const_reverse_iterator crend() const noexcept {
+            return rend();
         }
 
         //=====     Capacity      =====
@@ -223,25 +280,7 @@ export namespace MyLib {
         }
 
         iterator insert(const_iterator pos, const T& value) {
-            if (pos.m_ptrNode) {
-                if (pos->m_prev) {
-                    auto tmp = pos->m_prev;
-                    pos->m_next = new node{ value };
-                    auto new_tmp = pos->m_prev;
-                    new_tmp->m_next = pos.m_ptrNode;
-                    new_tmp->m_prev = tmp;
-                    tmp->m_next = new_tmp;
-
-
-                }
-                else {
-                    pos->m_prev = new node{ value };
-
-                }
-            }
-            else {
-
-            }
+            
         }
 
         iterator insert(const_iterator pos, T&& value);
