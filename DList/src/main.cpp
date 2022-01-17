@@ -10,6 +10,4 @@ int main() {
 	// Check if iterator is a bidirectional_iterator
 	static_assert(std::bidirectional_iterator<iterator>);
 	static_assert(std::bidirectional_iterator<const_iterator>);
-
-
 }
