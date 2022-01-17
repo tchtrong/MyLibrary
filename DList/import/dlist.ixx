@@ -176,7 +176,7 @@ export namespace MyLib {
             }
         }
 
-		template< std::input_iterator InputIt >
+		template<std::input_iterator InputIt>
         void assign(InputIt first, InputIt last) {
             this->clear();
             while (first != last) {
@@ -320,10 +320,10 @@ export namespace MyLib {
                 auto begin_ = ilist.begin();
                 auto end_ = ilist.end();
                 auto p = emplace(pos, *begin_);
-                --begin_;
+                ++begin_;
                 while (begin_ != end_) {
                     emplace(pos, *begin_);
-                    --begin_;
+                    ++begin_;
                 }
                 return p;
             }
@@ -376,7 +376,7 @@ export namespace MyLib {
         void pop_front() {
             if (m_rend->m_next) {
                 if (m_rend->m_next == m_end->m_prev) {
-                    delete m_rend->m_next;
+                    delete reinterpret_cast<node_data*>(m_rend->m_next);
                     m_rend->m_next = nullptr;
                     m_end->m_prev = nullptr;
                 }
@@ -386,7 +386,7 @@ export namespace MyLib {
                     m_rend->m_next->m_prev->m_next = nullptr;
                     m_rend->m_next->m_prev->m_prev = nullptr;
 
-                    delete m_rend->m_next->m_prev;
+                    delete reinterpret_cast<node_data*>(m_rend->m_next->m_prev);
 
                     m_rend->m_next->m_prev = m_rend;
                 }
@@ -405,7 +405,7 @@ export namespace MyLib {
         void pop_back() {
             if (m_end->m_prev) {
                 if (m_rend->m_next == m_end->m_prev) {
-                    delete m_end->m_prev;
+                    delete reinterpret_cast<node_data*>(m_end->m_prev);
                     m_rend->m_next = nullptr;
                     m_end->m_prev = nullptr;
                 }
@@ -415,7 +415,7 @@ export namespace MyLib {
                     m_end->m_prev->m_next->m_next = nullptr;
                     m_end->m_prev->m_next->m_prev = nullptr;
 
-                    delete m_end->m_prev->m_next;
+                    delete reinterpret_cast<node_data*>(m_end->m_prev->m_next);
 
                     m_end->m_prev->m_next = m_end;
                 }
@@ -426,9 +426,13 @@ export namespace MyLib {
         //=====     Operations       =====
 
         template<class Compare>
-        void sort(Compare comp);
+        void sort(Compare comp) {
+            //TODO
+        }
 
-        void sort();
+        void sort() {
+            sort(std::less);
+        }
 
         void reverse() {
             if (m_size <= 1) {
@@ -436,10 +440,6 @@ export namespace MyLib {
             }
             //TODO
         }
-
-        //=====     Misc       =====
-
-        
 
     private:
 
