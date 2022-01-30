@@ -5,8 +5,6 @@ module;
 
 export module dlist;
 
-
-
 export namespace ml {
 	template <class T>
 	class DList {
@@ -31,7 +29,7 @@ export namespace ml {
 		struct node_data : public node {
 			template<class ...Args>
 			node_data(Args&&...args) :m_val{ std::forward<Args>(args)... } {}
-			value_type m_val;
+			T m_val;
 		};
 
 	public:
@@ -46,6 +44,7 @@ export namespace ml {
 			using difference_type = DList<T>::difference_type;
 			using reference = DList<T>::reference;
 			using pointer = DList<T>::pointer;
+			using iterator_category = std::bidirectional_iterator_tag;
 
 			bool operator==(const iterator& rhs) const {
 				return m_parrent == rhs.m_parrent
@@ -94,6 +93,7 @@ export namespace ml {
 			using difference_type = DList<T>::difference_type;
 			using reference = DList<T>::const_reference;
 			using pointer = DList<T>::const_pointer;
+			using iterator_category = std::bidirectional_iterator_tag;
 
 			bool operator==(const const_iterator& rhs) const {
 				return m_parrent == rhs.m_parrent
@@ -319,28 +319,26 @@ export namespace ml {
 		//=====     Modifiers       =====
 
 		void clear() noexcept {
-			while (m_rend->m_next) {
-				this->pop_back();
-			}
+			this->erase(this->begin(), this->end());
 		}
 
 		iterator insert(const_iterator pos, const T& value) {
-			return emplace(pos, value);
+			return this->emplace(pos, value);
 		}
 
 		iterator insert(const_iterator pos, T&& value) {
-			return emplace(pos, std::move(value));
+			return this->emplace(pos, std::move(value));
 		}
 
 		iterator insert(const_iterator pos, size_type count, const T& value) {
 			if (!count) {
-				return pos;
+				return pos; //implicit conversion from const_iterator to iterator
 			}
 			else {
-				auto p = emplace(pos, value);
+				auto p = this->emplace(pos, value);
 				--count;
 				while (count > 0) {
-					emplace(pos, value);
+					this->emplace(pos, value);
 					--count;
 				}
 				return p;
@@ -350,13 +348,13 @@ export namespace ml {
 		template<std::input_iterator InputIt>
 		iterator insert(const_iterator pos, InputIt first, InputIt last) {
 			if (first == last) {
-				return pos;
+				return pos; //implicit conversion from const_iterator to iterator
 			}
 			else {
-				auto p = emplace(pos, *first);
+				auto p = this->emplace(pos, *first);
 				++first;
 				while (first != last) {
-					emplace(pos, *first);
+					this->emplace(pos, *first);
 				}
 				return p;
 			}
@@ -364,15 +362,15 @@ export namespace ml {
 
 		iterator insert(const_iterator pos, std::initializer_list<T> ilist) {
 			if (!ilist.size()) {
-				return pos;
+				return pos; //implicit conversion from const_iterator to iterator
 			}
 			else {
 				auto begin_ = ilist.begin();
 				auto end_ = ilist.end();
-				auto p = emplace(pos, *begin_);
+				auto p = this->emplace(pos, *begin_);
 				++begin_;
 				while (begin_ != end_) {
-					emplace(pos, *begin_);
+					this->emplace(pos, *begin_);
 					++begin_;
 				}
 				return p;
@@ -401,101 +399,100 @@ export namespace ml {
 				return { this, new_node };
 			}
 			else {
-				//TODO: Throw exception
+				return iterator{};
 			}
 		}
 
-		iterator erase(const_iterator pos) {
-			if (pos.m_parrent == this && pos.m_ptrNode != this->m_end && pos.m_ptrNode != this->m_rend) {
-				if (m_rend->m_next == m_end->m_prev) {
-					delete m_rend->m_next;
-					m_rend->m_next = nullptr;
-					m_end->m_prev = nullptr;
-				}
-			}
-			else {
-
-			}
-		}
-		iterator erase(const_iterator first, const_iterator last);
-
-		template< class... Args >
-		reference emplace_back(Args&&... args) {
-			return *emplace(end(), std::forward<Args>(args)...);
-		}
-
-		template< class... Args >
-		reference emplace_front(Args&&... args) {
-			return *emplace(begin(), std::forward<Args>(args)...);
-		}
-
-		void push_front(T&& value) {
-			emplace(begin(), std::move(value));
-		}
-
-		void push_front(const T& value) {
-			emplace(begin(), value);
-		}
-
-		void pop_front() {
-			if (m_rend->m_next) {
+		iterator erase(const_iterator pos) noexcept {
+			if (pos.m_parrent == this && m_size && pos.m_ptrNode != this->m_end && pos.m_ptrNode != this->m_rend) {
 				if (m_rend->m_next == m_end->m_prev) {
 					delete reinterpret_cast<node_data*>(m_rend->m_next);
 					m_rend->m_next = nullptr;
 					m_end->m_prev = nullptr;
+					--m_size;
+					return end();
 				}
 				else {
-					m_rend->m_next = m_rend->m_next->m_next;
-
-					m_rend->m_next->m_prev->m_next = nullptr;
-					m_rend->m_next->m_prev->m_prev = nullptr;
-
-					delete reinterpret_cast<node_data*>(m_rend->m_next->m_prev);
-
-					m_rend->m_next->m_prev = m_rend;
+					node* to_be_deleted = pos.m_ptrNode;
+					node* prev_ = to_be_deleted->m_prev;
+					node* next_ = to_be_deleted->m_next;
+					prev_->m_next = next_;
+					next_->m_prev = prev_;
+					delete reinterpret_cast<node_data*>(to_be_deleted);
+					--m_size;
+					return { this, next_ };
 				}
-				--m_size;
 			}
+			else {
+				return iterator{};
+			}
+		}
+
+		iterator erase(const_iterator first, const_iterator last) {
+			if (first.m_parrent != last.m_parrent || first.m_parrent != this) {
+				return iterator{};
+			}
+
+			if (first == last) {
+				return last;
+			}
+
+			iterator p{ first };
+			do {
+				p = this->erase(p);
+			} while (static_cast<const_iterator>(p) != last);
+			return p;
+		}
+
+		template< class... Args >
+		reference emplace_back(Args&&... args) {
+			return *(this->emplace(end(), std::forward<Args>(args)...));
+		}
+
+		template< class... Args >
+		reference emplace_front(Args&&... args) {
+			return *(this->emplace(begin(), std::forward<Args>(args)...));
+		}
+
+		void push_front(T&& value) {
+			this->emplace(this->begin(), std::move(value));
+		}
+
+		void push_front(const T& value) {
+			this->emplace(begin(), value);
+		}
+
+		void pop_front() noexcept {
+			this->erase(this->begin());
 		}
 
 		void push_back(T&& value) {
-			emplace(end(), std::move(value));
+			this->emplace(this->end(), std::move(value));
 		}
 
 		void push_back(const T& value) {
-			emplace(end(), value);
+			this->emplace(this->end(), value);
 		}
 
-		void pop_back() {
-			if (m_end->m_prev) {
-				if (m_rend->m_next == m_end->m_prev) {
-					delete reinterpret_cast<node_data*>(m_end->m_prev);
-					m_rend->m_next = nullptr;
-					m_end->m_prev = nullptr;
-				}
-				else {
-					m_end->m_prev = m_end->m_prev->m_prev;
-
-					m_end->m_prev->m_next->m_next = nullptr;
-					m_end->m_prev->m_next->m_prev = nullptr;
-
-					delete reinterpret_cast<node_data*>(m_end->m_prev->m_next);
-
-					m_end->m_prev->m_next = m_end;
-				}
-				--m_size;
-			}
+		void pop_back() noexcept {
+			this->erase(--(this->end()));
 		}
 
 		//=====     Operations       =====
 
 		template<class Compare>
 		void sort(Compare comp) {
-			sort_impl(m_rend->m_next, m_size, comp);
+			if (m_size <= 1) {
+				return;
+			}
+			DList<T>::sort_impl(reinterpret_cast<node_data*>(m_rend->m_next), m_size, comp);
 		}
 
 		void sort() {
-			sort(std::less<>{});
+			if (m_size <= 1) {
+				return;
+			}
+			this->sort(std::less<>{});
 		}
 
 		void reverse() {
@@ -506,28 +503,32 @@ export namespace ml {
 		}
 
 	private:
+		template<class Compare>
+		static node_data* merge_sort(node_data* first, node_data* mid, node_data* const last, Compare comp) {
+
+		}
 
 		template<class Compare>
 		static node_data* sort_impl(node_data* first, const size_type size_, Compare comp) {
-
 			switch (size_) {
 			case 0:
 				return first;
 			case 1:
-				return first->m_next;
+				return reinterpret_cast<node_data*>(first->m_next);
 			default:
 				break;
 			}
 
-			auto mid = sort_impl(first, size_ / 2, comp);
-			const auto last = sort_impl(mid, size_ - size_ / 2, comp);
-			first = merge_same(first, mid, last, comp);
+			auto mid = DList<T>::sort_impl(first, size_ / 2, comp);
+			const auto last = DList<T>::sort_impl(mid, size_ - size_ / 2, comp);
+			first = DList<T>::merge_sort(first, mid, last, comp);
+
 			return last;
 		}
 
 	private:
 		node* m_rend{};
 		node* m_end{};
-		int m_size{};
+		size_type m_size{};
 	};
 }
